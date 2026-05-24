@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: './',
+    base: '/PunkPlates---Meal-Plan/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
