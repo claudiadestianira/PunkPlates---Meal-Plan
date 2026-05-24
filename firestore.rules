@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Sync Room Collection rules for unauthenticated syncing
+    match /sync_rooms/{roomCode} {
+      // Allow get/read if they have the room code
+      allow get: if true;
+      
+      // Allow list queries (though clients usually perform get on single roomCode document)
+      allow list: if false; // prevent scanning/listing rooms! Only direct doc retrieval allowed.
+
+      // Validation for writes
+      allow create: if (
+        roomCode is string &&
+        roomCode.size() <= 32 &&
+        request.resource.data.roomCode == roomCode &&
+        request.resource.data.roomCode is string &&
+        (request.resource.data.menus is list || !request.resource.data.keys().hasAll(['menus'])) &&
+        (request.resource.data.mealPlans is list || !request.resource.data.keys().hasAll(['mealPlans'])) &&
+        (request.resource.data.groceryList is list || !request.resource.data.keys().hasAll(['groceryList']))
+      );
+
+      allow update: if (
+        roomCode is string &&
+        roomCode.size() <= 32 &&
+        request.resource.data.roomCode == roomCode &&
+        request.resource.data.roomCode == resource.data.roomCode &&
+        (request.resource.data.menus is list || !request.resource.data.keys().hasAll(['menus'])) &&
+        (request.resource.data.mealPlans is list || !request.resource.data.keys().hasAll(['mealPlans'])) &&
+        (request.resource.data.groceryList is list || !request.resource.data.keys().hasAll(['groceryList']))
+      );
+
+      allow delete: if false; // forbid client-side deletion of sync codes entirely
+    }
+  }
+}

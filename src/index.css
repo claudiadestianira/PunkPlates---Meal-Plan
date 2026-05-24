@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+  --color-earth-cream: #F8FAFC;
+  --color-earth-sand: #E2E8F0;
+  --color-earth-olive: #002FA7;
+  --color-earth-olive-light: #002585;
+  --color-earth-sage: #002FA7;
+  --color-earth-sage-light: #EFF4FF;
+  --color-earth-clay: #001C66;
+  --color-earth-clay-dark: #000E33;
+  --color-earth-charcoal: #0F172A;
+  --color-earth-warm-gray: #64748B;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-earth-cream);
+  color: var(--color-earth-charcoal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-serif-title {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+/* Beautiful custom input focus behaviors */
+input, textarea, select {
+  outline: none;
+}
+
+/* Scrollbar styling for list components */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-earth-sand);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-earth-sage);
+}

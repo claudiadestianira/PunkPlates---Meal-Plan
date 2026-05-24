@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "SyncRoom": {
+      "title": "Sync Room",
+      "description": "A cloud sync room that synchronizes recipe catalogs, meal plans, and grocery checklists across devices without a login using a unique room code.",
+      "type": "object",
+      "properties": {
+        "roomCode": {
+          "type": "string",
+          "description": "The unique six-character uppercase sync room code."
+        },
+        "menus": {
+          "type": "array",
+          "description": "The custom recipes catalog currently in the sync room."
+        },
+        "mealPlans": {
+          "type": "array",
+          "description": "The list of weekly meal plans."
+        },
+        "groceryList": {
+          "type": "array",
+          "description": "The active aggregated grocery checklist items."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp indicating when the room state was last updated."
+        }
+      },
+      "required": ["roomCode", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "sync_rooms/{roomCode}": {
+      "schema": "SyncRoom",
+      "description": "Main collection for real-time data sync rooms indexed by roomCode."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "D&C's Menupedia",
+  "description": "A personal food menu library, weekly meal planner, and dynamic grocery checklist generator with professional Punk Plates branding.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
