@@ -229,7 +229,10 @@ function Dashboard() {
         {/* TAB 2: WEEKLY MEAL PLANNER */}
         {activeTab === 'planner' && (
           <div className="animate-fade-in">
-            <WeeklyPlanner onNavigateToGrocery={() => setActiveTab('grocery')} />
+            <WeeklyPlanner
+              onNavigateToGrocery={() => setActiveTab('grocery')}
+              onOpenSyncModal={() => setIsSyncOpen(true)}
+            />
           </div>
         )}
 

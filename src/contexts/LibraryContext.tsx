@@ -248,18 +248,15 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('food_selected_month', month);
   };
 
-  // Cloud Sync properties - now synchronized and enabled by default
+  // Cloud Sync properties - now synchronized and enabled by default to a universal pool
   const [syncCode, setSyncCode] = useState<string | null>(() => {
     const stored = localStorage.getItem('food_sync_code');
-    if (stored) return stored;
-
-    // Default to enabled: Auto-generate a device sync code for instant multi-device integration
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let rPart = '';
-    for (let i = 0; i < 4; i++) {
-      rPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    // If we have an existing custom user code, keep it. Otherwise, force-migrate old PUNK- codes to UNIVERSAL
+    if (stored && stored !== 'UNIVERSAL' && !stored.startsWith('PUNK-')) {
+      return stored;
     }
-    const defaultCode = `PUNK-${rPart}`;
+
+    const defaultCode = 'UNIVERSAL';
     localStorage.setItem('food_sync_code', defaultCode);
     return defaultCode;
   });

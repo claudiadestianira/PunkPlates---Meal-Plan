@@ -5,6 +5,7 @@ import { ClipboardList, Plus, Trash2, SwitchCamera, Copy, Calendar, Eye, Refresh
 
 interface WeeklyPlannerProps {
   onNavigateToGrocery: () => void;
+  onOpenSyncModal: () => void;
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -22,7 +23,7 @@ const formatDateToYYYYMMDD = (date: Date): string => {
   return date.toISOString().split('T')[0];
 };
 
-export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocery }) => {
+export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocery, onOpenSyncModal }) => {
   const {
     menus,
     mealPlans,
@@ -117,7 +118,8 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
     };
 
     setActivePlan(updatedPlan);
-    triggerToast('Added ' + (menus.find(m => m.id === menuId)?.name || 'dish') + ' as a draft slot! Click "Save Plan" to sync.');
+    saveMealPlan(updatedPlan); // Auto-save and trigger instant multi-device syncing
+    triggerToast('Added ' + (menus.find(m => m.id === menuId)?.name || 'dish') + ' to plan & synchronized!');
     setIsPickerOpen(false);
     setTargetSlot(null);
   };
@@ -136,7 +138,8 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
     };
 
     setActivePlan(updatedPlan);
-    triggerToast(`Cleared draft slot for ${day}. Click "Save Plan" to sync changes.`);
+    saveMealPlan(updatedPlan); // Auto-save and trigger instant multi-device syncing
+    triggerToast(`Cleared ${meal} slot for ${day} & synchronized.`);
   };
 
   // Prompt Picker
@@ -308,9 +311,17 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
             <span>Enable Multi-Device Sync</span>
           </button>
         ) : (
-          <span className="text-[10px] uppercase font-bold tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-250 px-3 py-1.5 rounded-lg shrink-0">
-            • Live Linked
-          </span>
+          <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+            <span className="text-[10px] uppercase font-bold tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-250 px-3 py-2 rounded-lg">
+              • Live Linked
+            </span>
+            <button
+              onClick={onOpenSyncModal}
+              className="px-4 py-2.5 text-xs font-bold text-earth-olive bg-white hover:bg-earth-cream border border-earth-sand rounded-xl shadow-3xs cursor-pointer transition"
+            >
+              Configure / Pair Devices
+            </button>
+          </div>
         )}
       </div>
 
@@ -440,38 +451,85 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
                 Your weekly menu is currently empty. Choose "Pick Dish" on the slots above to populate this catalog!
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-80 overflow-y-auto pr-1">
-                {sortedScheduled.map(({ slotKey, day, meal, menu }) => (
-                  <div
-                    key={slotKey}
-                    className="flex gap-3.5 items-center p-3.5 rounded-2xl border border-earth-sand/60 bg-earth-cream/10 hover:border-earth-sage hover:bg-white transition duration-200 group"
-                  >
-                    {/* Cover Frame */}
-                    {menu.imageUrls && menu.imageUrls[0] && (
-                      <div className="h-14 w-20 rounded-xl overflow-hidden bg-earth-sand shrink-0">
-                        <img
-                          src={menu.imageUrls[0]}
-                          alt={menu.name}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    )}
+              <div className="overflow-x-auto -mx-6 sm:mx-0 border border-earth-sand/60 rounded-2xl">
+                <table className="w-full text-left border-collapse min-w-[550px]">
+                  <thead>
+                    <tr className="border-b border-earth-sand/60 bg-earth-cream/35 text-[11px] font-bold uppercase tracking-wider text-earth-olive">
+                      <th className="py-3 px-4 w-24">Day</th>
+                      <th className="py-3 px-4 w-1/2">☀️ Lunch</th>
+                      <th className="py-3 px-4 w-1/2">🌙 Dinner</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-earth-sand/40">
+                    {DAYS_OF_WEEK.map((day) => {
+                      const lunchMenuId = activePlan?.slots[`${day}-Lunch`];
+                      const lunchMenu = lunchMenuId ? menus.find(m => m.id === lunchMenuId) : null;
 
-                    <div className="min-w-0 flex-1 text-left">
-                      <span className="text-[9px] font-bold tracking-widest text-earth-clay uppercase bg-white px-2 py-0.5 rounded border border-earth-sand">
-                        {day} • {meal}
-                      </span>
-                      <h4 className="font-serif-title font-bold text-sm text-earth-charcoal leading-snug truncate mt-1.5 group-hover:text-earth-olive">
-                        {menu.name}
-                      </h4>
-                      <p className="text-[10px] text-earth-warm-gray truncate mt-1 flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-earth-sage"></span>
-                        {menu.category} ({menu.ingredients.length} items)
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                      const dinnerMenuId = activePlan?.slots[`${day}-Dinner`];
+                      const dinnerMenu = dinnerMenuId ? menus.find(m => m.id === dinnerMenuId) : null;
+
+                      return (
+                        <tr key={day} className="hover:bg-earth-cream/10 transition group/row">
+                          <td className="py-3 px-4 text-xs font-extrabold text-earth-charcoal bg-earth-cream/5 select-none">
+                            {day}
+                          </td>
+                          <td className="py-3 px-4 text-xs border-l border-earth-sand/30">
+                            {lunchMenu ? (
+                              <div className="flex items-center gap-3">
+                                {lunchMenu.imageUrls?.[0] && (
+                                  <div className="h-8 w-12 rounded-lg overflow-hidden bg-earth-sand shrink-0 border border-earth-sand/60">
+                                    <img
+                                      src={lunchMenu.imageUrls[0]}
+                                      alt={lunchMenu.name}
+                                      className="h-full w-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="font-serif-title font-bold text-earth-charcoal leading-tight truncate group-hover/row:text-earth-olive">
+                                    {lunchMenu.name}
+                                  </div>
+                                  <div className="text-[10px] text-earth-warm-gray mt-0.5 truncate uppercase tracking-tight">
+                                    {lunchMenu.category} • {lunchMenu.ingredients.length} items
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-earth-warm-gray/45 italic font-mono pl-1">— (unplanned)</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-xs border-l border-earth-sand/30">
+                            {dinnerMenu ? (
+                              <div className="flex items-center gap-3">
+                                {dinnerMenu.imageUrls?.[0] && (
+                                  <div className="h-8 w-12 rounded-lg overflow-hidden bg-earth-sand shrink-0 border border-earth-sand/60">
+                                    <img
+                                      src={dinnerMenu.imageUrls[0]}
+                                      alt={dinnerMenu.name}
+                                      className="h-full w-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="font-serif-title font-bold text-earth-charcoal leading-tight truncate group-hover/row:text-earth-olive">
+                                    {dinnerMenu.name}
+                                  </div>
+                                  <div className="text-[10px] text-earth-warm-gray mt-0.5 truncate uppercase tracking-tight">
+                                    {dinnerMenu.category} • {dinnerMenu.ingredients.length} items
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-earth-warm-gray/45 italic font-mono pl-1">— (unplanned)</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

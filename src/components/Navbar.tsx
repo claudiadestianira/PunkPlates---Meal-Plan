@@ -75,6 +75,21 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, grocery
               )}
             </button>
           </nav>
+
+          {/* Cloud Sync Status Trigger Button */}
+          <button
+            onClick={onOpenSyncModal}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border transition shrink-0 cursor-pointer shadow-3xs ${
+              syncCode
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200/60 hover:bg-emerald-100/80'
+                : 'bg-white border-earth-sand text-earth-warm-gray hover:bg-earth-sand hover:text-earth-charcoal'
+            }`}
+            title={syncCode ? `Connected to Cloud pairing room: ${syncCode}` : 'Database pairing is disabled'}
+          >
+            <Cloud className={`h-4 w-4 text-emerald-600 ${syncCode ? 'animate-pulse' : 'opacity-60'}`} />
+            <span className="hidden md:inline">Sync Room: {syncCode || 'Offline'}</span>
+            <span className="md:hidden font-mono font-black">{syncCode ? syncCode.split('-')[1] || syncCode : 'Off'}</span>
+          </button>
         </div>
       </div>
     </header>
