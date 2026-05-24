@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { Menu, MealPlan } from '../types';
-import { ClipboardList, Plus, Trash2, SwitchCamera, Copy, Calendar, Eye, RefreshCw, CheckCircle, Search, X } from 'lucide-react';
+import { ClipboardList, Plus, Trash2, SwitchCamera, Copy, Calendar, Eye, RefreshCw, CheckCircle, Search, X, Cloud } from 'lucide-react';
 
 interface WeeklyPlannerProps {
   onNavigateToGrocery: () => void;
@@ -33,6 +33,10 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
     generateGroceryList,
     loadMealPlan,
     cloneMealPlan,
+    syncCode,
+    syncStatus,
+    lastSyncedAt,
+    enableSync,
   } = useLibrary();
 
   // Active planning week state
@@ -48,6 +52,12 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
   // Trigger notice
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [planIdToConfirmDelete, setPlanIdToConfirmDelete] = useState<string | null>(null);
+
+  // Track unsaved slots compared to persisted layout
+  const storedPlanForThisWeek = mealPlans.find(p => p.weekStart === selectedWeekStart);
+  const currentSlotsJSON = JSON.stringify(activePlan?.slots || {});
+  const storedSlotsJSON = JSON.stringify(storedPlanForThisWeek?.slots || {});
+  const hasUnsavedChanges = currentSlotsJSON !== storedSlotsJSON;
 
   // Initialize planner to current week's Monday
   useEffect(() => {
@@ -84,6 +94,13 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
     setSelectedWeekStart(formatDateToYYYYMMDD(alignedMonday));
   };
 
+  // Explicit save action
+  const handleSavePlan = () => {
+    if (!activePlan) return;
+    saveMealPlan(activePlan);
+    triggerToast('🎉 Weekly plan successfully saved & synchronized across devices!');
+  };
+
   // Assign menu to a slot
   const handleAssignMenu = (menuId: string) => {
     if (!activePlan || !targetSlot) return;
@@ -100,8 +117,7 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
     };
 
     setActivePlan(updatedPlan);
-    saveMealPlan(updatedPlan);
-    triggerToast('Added ' + (menus.find(m => m.id === menuId)?.name || 'dish') + ' to plan!');
+    triggerToast('Added ' + (menus.find(m => m.id === menuId)?.name || 'dish') + ' as a draft slot! Click "Save Plan" to sync.');
     setIsPickerOpen(false);
     setTargetSlot(null);
   };
@@ -120,8 +136,7 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
     };
 
     setActivePlan(updatedPlan);
-    saveMealPlan(updatedPlan);
-    triggerToast(`Cleared ${meal} slot for ${day}.`);
+    triggerToast(`Cleared draft slot for ${day}. Click "Save Plan" to sync changes.`);
   };
 
   // Prompt Picker
@@ -171,6 +186,29 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
     return matchSearch && matchCategory;
   });
 
+  // Find all scheduled meals for the current week plan to display on the menu catalog
+  const activeSlots = activePlan?.slots || {};
+  const scheduledSlots = Object.entries(activeSlots)
+    .filter(([slotKey, menuId]) => !!menuId)
+    .map(([slotKey, menuId]) => {
+      const [day, meal] = slotKey.split('-');
+      const menu = menus.find(m => m.id === menuId);
+      return { slotKey, day, meal, menu };
+    })
+    .filter((item): item is { slotKey: string; day: string; meal: 'Lunch' | 'Dinner'; menu: Menu } => !!item.menu);
+
+  const dayOrder: { [key: string]: number } = {
+    'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6, 'Sunday': 7
+  };
+  const mealOrder: { [key: string]: number } = {
+    'Lunch': 1, 'Dinner': 2
+  };
+  const sortedScheduled = [...scheduledSlots].sort((a, b) => {
+    const dayDiff = (dayOrder[a.day] || 0) - (dayOrder[b.day] || 0);
+    if (dayDiff !== 0) return dayDiff;
+    return (mealOrder[a.meal] || 0) - (mealOrder[b.meal] || 0);
+  });
+
   return (
     <div className="space-y-8 relative">
       {/* Toast Notice */}
@@ -189,7 +227,7 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
             Weekly Meal Planner
           </h2>
           <p className="text-sm text-earth-warm-gray max-w-xl">
-            Schedule irresistible meals for two. Once planned, you can generate your shopping list below.
+            Schedule delicious dishes. Once completed, click <strong className="text-earth-clay">Save & Sync Plan</strong> to sync across your phones & laptops.
           </p>
         </div>
 
@@ -214,9 +252,66 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
             title="Saves this setup into next week"
           >
             <Copy className="h-4 w-4" />
-            <span className="hidden sm:inline">Clone to Next Week</span>
+            <span className="hidden sm:inline">Clone</span>
+          </button>
+
+          {/* Explicit Save button */}
+          <button
+            onClick={handleSavePlan}
+            className={`flex h-11.5 items-center justify-center gap-2 rounded-xl px-5 text-xs font-extrabold transition duration-200 shadow-sm ${
+              hasUnsavedChanges
+                ? 'bg-earth-clay text-white hover:bg-earth-clay-dark ring-2 ring-earth-clay/35 animate-pulse-subtle cursor-pointer'
+                : 'bg-white text-earth-sage border border-earth-sand hover:bg-earth-cream/50 cursor-pointer'
+            }`}
+            title="Save changes and sync to connected devices instantly"
+          >
+            {hasUnsavedChanges ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin-slow" />
+                <span>Save & Sync Plan *</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 text-emerald-600" />
+                <span>Plan Saved & Synced</span>
+              </>
+            )}
           </button>
         </div>
+      </div>
+
+      {/* Device Sync State Assistance bar */}
+      <div className="rounded-2xl border border-earth-sand bg-earth-cream/25 px-5 py-4.5 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3 text-left w-full md:w-auto">
+          <div className={`h-3 w-3 rounded-full shrink-0 ${syncCode ? 'bg-emerald-500 animate-pulse' : 'bg-earth-warm-gray'}`}></div>
+          <div>
+            <p className="font-bold text-sm text-earth-charcoal">
+              {syncCode ? `Cloud Database Device Sync Active (Pairing Room: ${syncCode})` : 'Standalone Local Browser Mode'}
+            </p>
+            <p className="text-xs text-earth-warm-gray mt-0.5">
+              {syncCode
+                ? `Updated across all connected screens in real-time. Last database connection: ${lastSyncedAt || 'Just now'}.`
+                : 'Edits will remain only on this browser. Enable pairing to sync across multiple phones & tablets.'}
+            </p>
+          </div>
+        </div>
+        {!syncCode ? (
+          <button
+            onClick={() => {
+              enableSync().then((code) => {
+                triggerToast(`Joined cloud pairing room ${code}!`);
+              });
+            }}
+            className="w-full md:w-auto shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-white hover:bg-earth-cream border border-earth-sand px-4 py-2.5 text-xs font-bold text-earth-olive transition cursor-pointer"
+          >
+            <Cloud className="h-4 w-4" />
+            <span>Enable Multi-Device Sync</span>
+          </button>
+        ) : (
+          <span className="text-[10px] uppercase font-bold tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-250 px-3 py-1.5 rounded-lg shrink-0">
+            • Live Linked
+          </span>
+        )}
       </div>
 
       {/* Main planner grid */}
@@ -323,47 +418,86 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
         </div>
       </div>
 
-      {/* Meal plans historical index view */}
+      {/* NEW SECTION: Meal Plan & Weekly Menu Catalog Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
-        {/* Left Side Generator Banner */}
-        <div className="lg:col-span-2 rounded-3xl bg-earth-olive text-white p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 justify-between border border-earth-olive-light shadow-md">
-          <div className="space-y-2 text-center sm:text-left">
-            <h3 className="font-serif text-xl sm:text-2xl font-bold">Consolidated Shopping Hub</h3>
-            <p className="text-sm text-earth-sage-light max-w-md leading-relaxed">
-              Sum quantities automatic for identical ingredients! Take the pain out of checklist scaling.
-            </p>
+        {/* Left Side: Active Weekly Menu Catalog */}
+        <div className="lg:col-span-2 rounded-3xl border border-earth-sand bg-white p-6 sm:p-8 flex flex-col justify-between shadow-xs">
+          <div>
+            <div className="flex items-center justify-between border-b border-earth-sand/60 pb-4 mb-5">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-earth-olive leading-tight">Weekly Menu Catalog</h3>
+                <p className="text-xs text-earth-warm-gray mt-1">
+                  List of assigned menus for the active week of <strong className="text-earth-clay font-bold">{new Date(selectedWeekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
+                </p>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wide bg-earth-cream border border-earth-sand px-3 py-1 rounded-xl text-earth-charcoal">
+                {sortedScheduled.length} scheduled meals
+              </span>
+            </div>
+
+            {sortedScheduled.length === 0 ? (
+              <div className="py-14 text-center text-xs text-earth-warm-gray italic bg-earth-cream/15 rounded-2xl border border-dashed border-earth-sand">
+                Your weekly menu is currently empty. Choose "Pick Dish" on the slots above to populate this catalog!
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-80 overflow-y-auto pr-1">
+                {sortedScheduled.map(({ slotKey, day, meal, menu }) => (
+                  <div
+                    key={slotKey}
+                    className="flex gap-3.5 items-center p-3.5 rounded-2xl border border-earth-sand/60 bg-earth-cream/10 hover:border-earth-sage hover:bg-white transition duration-200 group"
+                  >
+                    {/* Cover Frame */}
+                    {menu.imageUrls && menu.imageUrls[0] && (
+                      <div className="h-14 w-20 rounded-xl overflow-hidden bg-earth-sand shrink-0">
+                        <img
+                          src={menu.imageUrls[0]}
+                          alt={menu.name}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1 text-left">
+                      <span className="text-[9px] font-bold tracking-widest text-earth-clay uppercase bg-white px-2 py-0.5 rounded border border-earth-sand">
+                        {day} • {meal}
+                      </span>
+                      <h4 className="font-serif-title font-bold text-sm text-earth-charcoal leading-snug truncate mt-1.5 group-hover:text-earth-olive">
+                        {menu.name}
+                      </h4>
+                      <p className="text-[10px] text-earth-warm-gray truncate mt-1 flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-earth-sage"></span>
+                        {menu.category} ({menu.ingredients.length} items)
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <button
-            onClick={handleTriggerGrocery}
-            className="shrink-0 inline-flex items-center gap-2.5 rounded-xl bg-earth-clay hover:bg-earth-clay-dark px-6 py-4.5 text-sm font-bold text-white shadow-lg shadow-black/10 transition duration-200 w-full sm:w-auto justify-center"
-            id="generate-grocery-list-btn"
-          >
-            <ClipboardList className="h-5 w-5" />
-            <span>Generate Groceries</span>
-          </button>
         </div>
 
-        {/* Right Side history catalog selector */}
-        <div className="rounded-3xl border border-earth-sand bg-white p-6 flex flex-col justify-between">
+        {/* Right Side: Meal Plan Archives catalog Selector */}
+        <div className="rounded-3xl border border-earth-sand bg-white p-6 flex flex-col justify-between shadow-xs">
           <div>
-            <h3 className="font-serif text-lg font-bold text-earth-olive mb-1 leading-tight">Meal Plan Catalog</h3>
+            <h3 className="font-serif text-lg font-bold text-earth-olive mb-1 leading-tight">Meal Plan History</h3>
             <p className="text-xs text-earth-warm-gray mb-4">Reload past schedules instantly:</p>
             {mealPlans.length === 0 ? (
               <p className="text-xs text-earth-warm-gray italic py-4 text-center bg-earth-cream/40 rounded-xl">
-                No archived plans yet. Build plans to populate history!
+                No archived plans yet.
               </p>
             ) : (
-              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                 {mealPlans.map((plan) => (
                   <div
                     key={plan.id}
-                    className={`flex items-center justify-between p-2 rounded-xl text-xs transition border ${
+                    className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition border ${
                       activePlan?.id === plan.id
                         ? 'bg-earth-sage-light/40 border-earth-sage font-bold'
                         : 'bg-white border-earth-sand/60 hover:bg-earth-cream'
                     }`}
                   >
-                    <div className="truncate flex-1 cursor-pointer pr-2" onClick={() => loadMealPlan(plan.id)}>
+                    <div className="truncate flex-1 cursor-pointer pr-2 text-left" onClick={() => loadMealPlan(plan.id)}>
                       <p className="font-semibold text-earth-charcoal truncate">{plan.name}</p>
                       <p className="text-[10px] text-earth-warm-gray mt-0.5">Week: {plan.weekStart}</p>
                     </div>
@@ -395,7 +529,7 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
                           e.stopPropagation();
                           setPlanIdToConfirmDelete(plan.id);
                         }}
-                        className="text-earth-warm-gray hover:text-red-500 p-1.5 transition shrink-0"
+                        className="text-earth-warm-gray hover:text-red-500 p-1.5 transition shrink-0 cursor-pointer"
                         title="Delete archived plan"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -407,6 +541,24 @@ export const WeeklyPlanner: React.FC<WeeklyPlannerProps> = ({ onNavigateToGrocer
             )}
           </div>
         </div>
+      </div>
+
+      {/* NEW MOVED COMPONENT: Consolidated Shopping Hub placed below the catalogs */}
+      <div className="rounded-3xl bg-earth-olive text-white p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 justify-between border border-earth-olive-light shadow-md">
+        <div className="space-y-2 text-center sm:text-left">
+          <h3 className="font-serif text-xl sm:text-2xl font-bold">Consolidated Shopping Hub</h3>
+          <p className="text-sm text-earth-sage-light max-w-md leading-relaxed">
+            Sum quantities automatic for identical ingredients! Take the pain out of checklist scaling.
+          </p>
+        </div>
+        <button
+          onClick={handleTriggerGrocery}
+          className="shrink-0 inline-flex items-center gap-2.5 rounded-xl bg-earth-clay hover:bg-earth-clay-dark px-6 py-4.5 text-sm font-bold text-white shadow-lg shadow-black/10 transition duration-200 w-full sm:w-auto justify-center cursor-pointer transform hover:scale-[1.01] active:scale-95"
+          id="generate-grocery-list-btn"
+        >
+          <ClipboardList className="h-5 w-5" />
+          <span>Generate Groceries</span>
+        </button>
       </div>
 
       {/* Picker Search Modal overlay */}

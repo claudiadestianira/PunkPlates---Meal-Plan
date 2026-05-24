@@ -171,11 +171,72 @@ const ensureEmojisInName = (name: string): string => {
   return `${trimmed} ${getEmojiForName(trimmed)}`;
 };
 
+const stripStockImages = (items: Menu[]): Menu[] => {
+  return items.map(item => ({
+    ...item,
+    name: ensureEmojisInName(item.name),
+    imageUrls: item.imageUrls?.filter(url => url && !url.includes('unsplash.com')) || []
+  }));
+};
+
 export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [menus, setMenus] = useState<Menu[]>([]);
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
-  const [currentMealPlan, setCurrentMealPlan] = useState<MealPlan | null>(null);
-  const [groceryList, setGroceryList] = useState<GroceryItem[]>([]);
+  const [menus, setMenus] = useState<Menu[]>(() => {
+    const storedMenus = localStorage.getItem('food_menus');
+    const storedDeleted = localStorage.getItem('food_deleted_menu_ids');
+    const deletedIds = new Set<string>(storedDeleted ? JSON.parse(storedDeleted) as string[] : []);
+
+    if (storedMenus) {
+      try {
+        const parsed = JSON.parse(storedMenus) as Menu[];
+        const parsedFiltered = parsed.filter(m => !deletedIds.has(m.id));
+        const existingIds = new Set(parsedFiltered.map(m => m.id));
+        const missingSeeds = SEED_MENUS.filter(m => !existingIds.has(m.id) && !deletedIds.has(m.id));
+        
+        if (missingSeeds.length > 0 || parsedFiltered.length !== parsed.length) {
+          const merged = stripStockImages([...parsedFiltered, ...missingSeeds]);
+          localStorage.setItem('food_menus', JSON.stringify(merged));
+          return merged;
+        } else {
+          const cleaned = stripStockImages(parsedFiltered);
+          localStorage.setItem('food_menus', JSON.stringify(cleaned));
+          return cleaned;
+        }
+      } catch (err) {
+        const cleaned = stripStockImages(SEED_MENUS.filter(m => !deletedIds.has(m.id)));
+        localStorage.setItem('food_menus', JSON.stringify(cleaned));
+        return cleaned;
+      }
+    } else {
+      const cleaned = stripStockImages(SEED_MENUS.filter(m => !deletedIds.has(m.id)));
+      localStorage.setItem('food_menus', JSON.stringify(cleaned));
+      return cleaned;
+    }
+  });
+
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>(() => {
+    const stored = localStorage.getItem('food_meal_plans');
+    return stored ? JSON.parse(stored) as MealPlan[] : [];
+  });
+
+  const [currentMealPlan, setCurrentMealPlan] = useState<MealPlan | null>(() => {
+    const storedCurrentPlanId = localStorage.getItem('food_current_plan_id');
+    const storedPlans = localStorage.getItem('food_meal_plans');
+    if (storedCurrentPlanId && storedPlans) {
+      try {
+        const plans = JSON.parse(storedPlans) as MealPlan[];
+        return plans.find(p => p.id === storedCurrentPlanId) || null;
+      } catch (err) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [groceryList, setGroceryList] = useState<GroceryItem[]>(() => {
+    const stored = localStorage.getItem('food_grocery_list');
+    return stored ? JSON.parse(stored) as GroceryItem[] : [];
+  });
+
   const [selectedMonth, setSelectedMonthState] = useState<string>(() => {
     const stored = localStorage.getItem('food_selected_month');
     if (stored) return stored;
@@ -187,20 +248,26 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('food_selected_month', month);
   };
 
-  // Cloud Sync properties
-  const [syncCode, setSyncCode] = useState<string | null>(() => localStorage.getItem('food_sync_code'));
+  // Cloud Sync properties - now synchronized and enabled by default
+  const [syncCode, setSyncCode] = useState<string | null>(() => {
+    const stored = localStorage.getItem('food_sync_code');
+    if (stored) return stored;
+
+    // Default to enabled: Auto-generate a device sync code for instant multi-device integration
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let rPart = '';
+    for (let i = 0; i < 4; i++) {
+      rPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const defaultCode = `PUNK-${rPart}`;
+    localStorage.setItem('food_sync_code', defaultCode);
+    return defaultCode;
+  });
+
   const [syncStatus, setSyncStatus] = useState<'disconnected' | 'syncing' | 'synced' | 'error'>('disconnected');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => localStorage.getItem('food_last_synced_at'));
 
   const isIncomingSyncRef = useRef(false);
-
-  const stripStockImages = (items: Menu[]): Menu[] => {
-    return items.map(item => ({
-      ...item,
-      name: ensureEmojisInName(item.name),
-      imageUrls: item.imageUrls?.filter(url => url && !url.includes('unsplash.com')) || []
-    }));
-  };
 
   // Upload state helper
   const triggerCloudUpload = async (
@@ -229,60 +296,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // 1. Initial Load from LocalStorage (or seed data if empty) & URL param sync check
+  // 1. URL param pairing sync check (and automatic cleanup of query strings on link)
   useEffect(() => {
-    const storedMenus = localStorage.getItem('food_menus');
-    const storedDeleted = localStorage.getItem('food_deleted_menu_ids');
-    const deletedIds = new Set<string>(storedDeleted ? JSON.parse(storedDeleted) as string[] : []);
-
-    if (storedMenus) {
-      try {
-        const parsed = JSON.parse(storedMenus) as Menu[];
-        // Filter out any internally tracked deleted items just in case
-        const parsedFiltered = parsed.filter(m => !deletedIds.has(m.id));
-        
-        // Intelligently merge any missing seeded menus into their list so they see new 80 items immediately, ignoring deleted ones
-        const existingIds = new Set(parsedFiltered.map(m => m.id));
-        const missingSeeds = SEED_MENUS.filter(m => !existingIds.has(m.id) && !deletedIds.has(m.id));
-        
-        if (missingSeeds.length > 0 || parsedFiltered.length !== parsed.length) {
-          const merged = stripStockImages([...parsedFiltered, ...missingSeeds]);
-          localStorage.setItem('food_menus', JSON.stringify(merged));
-          setMenus(merged);
-        } else {
-          const cleaned = stripStockImages(parsedFiltered);
-          localStorage.setItem('food_menus', JSON.stringify(cleaned));
-          setMenus(cleaned);
-        }
-      } catch (err) {
-        const cleaned = stripStockImages(SEED_MENUS.filter(m => !deletedIds.has(m.id)));
-        localStorage.setItem('food_menus', JSON.stringify(cleaned));
-        setMenus(cleaned);
-      }
-    } else {
-      const cleaned = stripStockImages(SEED_MENUS.filter(m => !deletedIds.has(m.id)));
-      localStorage.setItem('food_menus', JSON.stringify(cleaned));
-      setMenus(cleaned);
-    }
-
-    const storedPlans = localStorage.getItem('food_meal_plans');
-    if (storedPlans) {
-      setMealPlans(JSON.parse(storedPlans));
-    }
-
-    const storedGrocery = localStorage.getItem('food_grocery_list');
-    if (storedGrocery) {
-      setGroceryList(JSON.parse(storedGrocery));
-    }
-
-    const storedCurrentPlanId = localStorage.getItem('food_current_plan_id');
-    if (storedCurrentPlanId && storedPlans) {
-      const plans = JSON.parse(storedPlans) as MealPlan[];
-      const found = plans.find(p => p.id === storedCurrentPlanId);
-      if (found) setCurrentMealPlan(found);
-    }
-
-    // Auto-link if passed inside URL query string
     const params = new URLSearchParams(window.location.search);
     const urlSyncCode = params.get('sync');
     if (urlSyncCode) {
