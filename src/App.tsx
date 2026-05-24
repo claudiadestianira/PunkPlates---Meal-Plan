@@ -21,7 +21,7 @@ function Dashboard() {
   // Search, Filter & Sort State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [sortBy, setSortBy] = useState<SortOption>('created');
+  const [sortBy, setSortBy] = useState<SortOption>('alpha-asc');
 
   // Modal view states
   const [viewingMenu, setViewingMenu] = useState<Menu | null>(null);
@@ -156,8 +156,8 @@ function Dashboard() {
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
                     className="w-full sm:w-auto rounded-xl border border-earth-sand bg-white pl-3 pr-8 py-3 text-xs font-bold text-earth-charcoal focus:border-earth-sage focus:ring-1 focus:ring-earth-sage cursor-pointer transition"
                   >
-                    <option value="created">🕒 Recently Added</option>
                     <option value="alpha-asc">🔤 Alphabetical (A-Z)</option>
+                    <option value="created">🕒 Recently Added</option>
                     <option value="alpha-desc">🔤 Alphabetical (Z-A)</option>
                     <option value="least-cooked">🍳 Least to most cooked</option>
                     <option value="most-cooked">🔥 Most to least cooked</option>
